@@ -1,16 +1,68 @@
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import words from "./wordList.json"
 import { HangmanDrawing } from "./HangmanDrawing"
 import { HangmanWord } from "./HangmanWord"
 import { Keyboard } from "./Keyboard"
 
+function getWord() {
+  return words[Math.floor(Math.random() * words.length)]
+}
+
 function App() {
   // create a state
-  const [wordToGuess, setWordToGuess] = useState(() => {
-    return words[Math.floor(Math.random() * words.length)]
-  })
+  const [wordToGuess, setWordToGuess] = useState(getWord())
 
   const [guessedLetters, setGuessedLetters] = useState<string[]>([])
+
+  const incorrectLetters = guessedLetters.filter(letter => !wordToGuess.includes(letter))
+
+  const isLoser = incorrectLetters.length >= 6 // because there are 6 body parts, if you guessed 6 times wrong you lose
+  const isWinner = wordToGuess.split("").every(letter => guessedLetters.includes(letter))
+
+  // callback
+  const addGuessedLetter = useCallback((key: string) => {
+    if (guessedLetters.includes(key) || isLoser || isWinner) return 
+
+    setGuessedLetters(currentLetters => [...currentLetters, key])
+  },
+  [guessedLetters, isLoser, isWinner])
+
+  // event handler for keypress in keyboard
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const key = e.key
+      if (!key.match(/^[a-z]$/)) return
+
+      e.preventDefault()
+
+      addGuessedLetter(key)
+    }
+
+    document.addEventListener("keypress", handler)
+
+    return () => {
+      document.removeEventListener("keypress", handler)
+    }
+  }, [guessedLetters])
+
+
+  // event handler to give a new word when game over and pressed ENTER
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const key = e.key
+      if (key !== "Enter") return
+
+      e.preventDefault()
+      setGuessedLetters([])
+      setWordToGuess(getWord())
+    }
+
+    document.addEventListener("keypress", handler)
+
+    return () => {
+      document.removeEventListener("keypress", handler)
+    }
+  }, [])
 
   return (
     <div style={{
@@ -24,13 +76,21 @@ function App() {
       <div style={{
         fontSize: "2rem", textAlign: "center"
       }}>
-        Win
-        Lose
+        {isWinner && "You have guessed it..!! Press ENTER to try new word!"}
+        {isLoser && "You got HANGED..!! Press ENTER to try again!"}
       </div>
 
-      <HangmanDrawing />
-      <HangmanWord />
-      <Keyboard />
+      <HangmanDrawing numberOfGuesses = {incorrectLetters.length}/>
+      <HangmanWord reveal={isLoser} guessedLetters = {guessedLetters} wordToGuess = {wordToGuess}/>
+
+      <div style={{ alignSelf: "stretch"}}>
+        <Keyboard 
+            activeLetters = {guessedLetters.filter(letter => wordToGuess.includes(letter))}
+            inactiveLetters = {incorrectLetters}
+            addGuessedLetters = {addGuessedLetter}
+            disabled={isLoser || isWinner}
+         />
+      </div>
     </div>
   )
 }
